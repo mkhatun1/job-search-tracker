@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Job Search Autopilot</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#f6f7f9;--card:#fff;--tx:#1b1f24;--mu:#66707a;--ac:#0f766e;--bd:#dde1e6;--warn:#b45309}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#12161a;--card:#1c2228;--tx:#e8ecef;--mu:#9aa5ae;--ac:#2dd4bf;--bd:#2f3840;--warn:#fbbf24}}
+:root[data-theme="dark"]{--bg:#12161a;--card:#1c2228;--tx:#e8ecef;--mu:#9aa5ae;--ac:#2dd4bf;--bd:#2f3840;--warn:#fbbf24}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
+main{max-width:860px;margin:0 auto;padding:16px}
+h1{font-size:22px;margin:4px 0 12px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:14px}
+.tabs{display:flex;gap:8px;margin-bottom:14px}
+button,select,input,textarea{font:inherit;color:var(--tx);background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:8px}
+button{cursor:pointer}
+button.p,.tabs button.on{background:var(--ac);color:#fff;border-color:var(--ac)}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.row>*{flex:1 1 150px}
+textarea{width:100%;min-height:110px;resize:vertical}
+.stats{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.stat{flex:1 1 90px;text-align:center;padding:10px}
+.stat b{display:block;font-size:20px;color:var(--ac)}
+.tw{overflow-x:auto}
+table{width:100%;border-collapse:collapse;min-width:560px}
+th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--bd);vertical-align:middle}
+th{color:var(--mu);font-size:12px;text-transform:uppercase}
+.due{color:var(--warn);font-weight:600}
+.mu{color:var(--mu);font-size:13px}
+pre{white-space:pre-wrap;background:var(--bg);border:1px solid var(--bd);border-radius:8px;padding:10px;max-height:320px;overflow:auto}
+a{color:var(--ac)}
+</style></head><body><main>
+<h1>🐢 Job Search Autopilot</h1>
+<div class="tabs"><button id="t1" class="on">Tracker</button><button id="t2">Prompt Kit</button></div>
+<div id="v1">
+ <div class="stats" id="stats"></div>
+ <div class="card"><b>Add a job</b>
+  <div class="row" style="margin-top:8px">
+   <input id="co" placeholder="Company"><input id="ro" placeholder="Role"><input id="li" placeholder="Link (optional)">
+   <button class="p" id="add">Add</button></div></div>
+ <div class="card tw"><table><thead><tr><th>Company / Role</th><th>Status</th><th>Follow up</th><th></th></tr></thead><tbody id="rows"></tbody></table>
+  <div class="mu" id="empty">No jobs yet. Add your first one above. Aim for 5 quality applications a day.</div></div>
+</div>
+<div id="v2" hidden>
+ <div class="card"><b>Your resume / background</b> <span class="mu">(saved in this browser only)</span>
+  <textarea id="res" placeholder="Paste your resume or a summary of your experience"></textarea></div>
+ <div class="card"><b>Job description</b>
+  <textarea id="jd" placeholder="Paste the job description"></textarea>
+  <div class="row" style="margin-top:8px"><select id="task"></select><button class="p" id="gen">Generate prompt</button></div></div>
+ <div class="card" id="out" hidden><div class="row"><b>Paste this into Claude or ChatGPT</b><button id="cp">Copy</button></div><pre id="pr"></pre></div>
+</div>
+<p class="mu">Data is stored only in your browser. Clearing site data erases it.</p>
+</main>
+<script>
+const $=s=>document.getElementById(s);
+const ST=["Saved","Applied","Interview","Offer","Rejected"];
+let S={jobs:[],resume:""};
+try{const r=localStorage.getItem("jsa");if(r)S=JSON.parse(r)}catch(e){}
+function save(){try{localStorage.setItem("jsa",JSON.stringify(S))}catch(e){}}
+const esc=t=>String(t).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const today=()=>new Date().toISOString().slice(0,10);
+const addDays=(d,n)=>{const x=new Date(d+"T00:00:00");x.setDate(x.getDate()+n);return x.toISOString().slice(0,10)};
+function render(){
+ const j=S.jobs,c=s=>j.filter(x=>x.status===s).length;
+ const appliedToday=j.filter(x=>x.applied===today()).length;
+ $("stats").innerHTML=[["Today",appliedToday+"/5"],...ST.map(s=>[s,c(s)])].map(a=>`<div class="card stat"><b>${a[1]}</b><span class="mu">${a[0]}</span></div>`).join("");
+ $("empty").hidden=j.length>0;
+ $("rows").innerHTML=j.map((x,i)=>{
+  const due=x.status==="Applied"&&x.followup&&x.followup<=today();
+  return `<tr><td><b>${esc(x.company)}</b><br><span class="mu">${esc(x.role)}</span>${x.link&&/^https?:\/\//.test(x.link)?` · <a href="${esc(x.link)}" target="_blank" rel="noopener">link</a>`:""}</td>
+  <td><select data-s="${i}">${ST.map(s=>`<option${s===x.status?" selected":""}>${s}</option>`).join("")}</select></td>
+  <td class="${due?"due":"mu"}">${x.followup?(due?"Due now · ":"")+x.followup:"–"}</td>
+  <td><button data-d="${i}" aria-label="Delete">✕</button></td></tr>`}).join("");
+}
+$("add").onclick=()=>{
+ const company=$("co").value.trim(),role=$("ro").value.trim();
+ if(!company||!role)return;
+ S.jobs.unshift({company,role,link:$("li").value.trim(),status:"Saved",applied:"",followup:""});
+ $("co").value=$("ro").value=$("li").value="";save();render();
+};
+$("rows").onchange=e=>{const i=e.target.dataset.s;if(i==null)return;const x=S.jobs[i];x.status=e.target.value;
+ if(x.status==="Applied"&&!x.applied){x.applied=today();x.followup=addDays(today(),7)}save();render()};
+$("rows").onclick=e=>{const i=e.target.dataset.d;if(i==null)return;S.jobs.splice(i,1);save();render()};
+const T={
+ "Match analysis":"Compare my background to this job. List: (1) my strongest matches, (2) gaps, (3) keywords I should add, (4) an honest fit score out of 10.",
+ "Tailor resume bullets":"Rewrite 5 bullet points from my background to match this job. Use strong verbs and metrics where I gave them. Do not invent experience.",
+ "Cover letter":"Write a concise cover letter (under 220 words) for this role. Open with a specific hook, use 2 relevant achievements from my background, and keep a confident, human tone.",
+ "Recruiter outreach":"Write a short LinkedIn message (under 80 words) to the recruiter or hiring manager for this role. Be specific, friendly, and end with a clear low-pressure ask.",
+ "Interview prep":"Give me the 8 most likely interview questions for this role, plus a strong answer outline for each based on my background (use STAR format).",
+ "Follow-up email":"Write a polite follow-up email (under 90 words) for an application I sent a week ago. Reaffirm interest and add one new relevant point."
+};
+$("task").innerHTML=Object.keys(T).map(k=>`<option>${k}</option>`).join("");
+$("res").value=S.resume||"";
+$("res").oninput=()=>{S.resume=$("res").value;save()};
+$("gen").onclick=()=>{
+ const jd=$("jd").value.trim();if(!jd){$("jd").focus();return}
+ $("pr").textContent=`You are an expert career coach and recruiter.\n\nTASK: ${T[$("task").value]}\n\nMY BACKGROUND:\n${$("res").value.trim()||"[paste your resume here]"}\n\nJOB DESCRIPTION:\n${jd}`;
+ $("out").hidden=false;
+};
+$("cp").onclick=async()=>{try{await navigator.clipboard.writeText($("pr").textContent);$("cp").textContent="Copied ✓"}catch(e){$("cp").textContent="Select and copy manually"}setTimeout(()=>$("cp").textContent="Copy",1800)};
+function tab(n){$("v1").hidden=n!==1;$("v2").hidden=n!==2;$("t1").className=n===1?"on":"";$("t2").className=n===2?"on":""}
+$("t1").onclick=()=>tab(1);$("t2").onclick=()=>tab(2);
+render();
+</script></body></html>
